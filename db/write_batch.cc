@@ -113,6 +113,7 @@ void WriteBatch::Append(const WriteBatch& source) {
 }
 
 namespace {
+// 用于将WriteBatch中的记录存入MemTable
 class MemTableInserter : public WriteBatch::Handler {
  public:
   SequenceNumber sequence_;
