@@ -32,6 +32,7 @@ class Slice;
 
 class LEVELDB_EXPORT WriteBatch {
  public:
+  // 用于迭代WriteBatch的内容
   class LEVELDB_EXPORT Handler {
    public:
     virtual ~Handler();
@@ -70,12 +71,19 @@ class LEVELDB_EXPORT WriteBatch {
   void Append(const WriteBatch& source);
 
   // Support for iterating over the contents of a batch.
+  // 遍历WriteBatch的内容，并把key,value的更新以及key的删除写入handler
   Status Iterate(Handler* handler) const;
 
  private:
   friend class WriteBatchInternal;
 
-  std::string rep_;  // See comment in write_batch.cc for the format of rep_
+  // See comment in write_batch.cc for the format of rep_
+  // 最终写入磁盘的内容
+  // |header|record 1|record 2|...|record n|
+  // header         = |8字节序列号: fixed64|4字节记录数: fixed32|
+  // record(Put)    = |1字节kTypeValue: char|key的长度: varint32|key: varstring|value的长度: varint32|value: varstring|
+  // record(Delete) = |1字节kTypeDeletion: char|key的长度: varint32|key: varstring|
+  std::string rep_;
 };
 
 }  // namespace leveldb
