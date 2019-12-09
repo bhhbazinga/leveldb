@@ -175,7 +175,9 @@ class DBImpl : public DB {
   port::CondVar background_work_finished_signal_ GUARDED_BY(mutex_);
   MemTable* mem_;
   MemTable* imm_ GUARDED_BY(mutex_);  // Memtable being compacted
-  std::atomic<bool> has_imm_;         // So bg thread can detect non-null imm_
+  // So bg thread can detect non-null imm_
+  // 用于告知后台线程当前是否存在immutable memtable
+  std::atomic<bool> has_imm_;         
   WritableFile* logfile_;
   uint64_t logfile_number_ GUARDED_BY(mutex_);
   log::Writer* log_;
@@ -199,6 +201,7 @@ class DBImpl : public DB {
   VersionSet* const versions_;
 
   // Have we encountered a background error in paranoid mode?
+  // 后台任务状态
   Status bg_error_ GUARDED_BY(mutex_);
 
   CompactionStats stats_[config::kNumLevels] GUARDED_BY(mutex_);

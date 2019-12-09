@@ -35,6 +35,7 @@ class WriteBatchInternal {
 
   static void SetContents(WriteBatch* batch, const Slice& contents);
 
+  // 将WriteBatch中的记录插入MemTable
   static Status InsertInto(const WriteBatch* batch, MemTable* memtable);
 
   static void Append(WriteBatch* dst, const WriteBatch* src);

@@ -203,12 +203,14 @@ class VersionSet {
   }
 
   // Return the number of Table files at the specified level.
+  // 返回level层的sstable文件数量
   int NumLevelFiles(int level) const;
 
   // Return the combined file size of all files at the specified level.
   int64_t NumLevelBytes(int level) const;
 
   // Return the last sequence number.
+  // 返回最近写入操作的序列号
   uint64_t LastSequence() const { return last_sequence_; }
 
   // Set the last sequence number to s.
@@ -225,6 +227,7 @@ class VersionSet {
 
   // Return the log file number for the log file that is currently
   // being compacted, or zero if there is no such log file.
+  //返回正在合并的log文件号，如果没有则返回0
   uint64_t PrevLogNumber() const { return prev_log_number_; }
 
   // Pick level and inputs for a new compaction.

@@ -73,12 +73,15 @@ struct LEVELDB_EXPORT Options {
 
   // Amount of data to build up in memory (backed by an unsorted log
   // on disk) before converting to a sorted on-disk file.
+  // memtable在序列化未sstable前在内存中的大小
   //
   // Larger values increase performance, especially during bulk loads.
   // Up to two write buffers may be held in memory at the same time,
   // so you may wish to adjust this parameter to control memory usage.
   // Also, a larger write buffer will result in a longer recovery time
   // the next time the database is opened.
+  // 更大的值可以提升性能，最多同时会有两个write buffer(memtable和immutable memtable)，
+  // 调整这个值可以控制内存使用，同时，更大的写write buffer会增加下一次启动数据库时recovery耗时。
   size_t write_buffer_size = 4 * 1024 * 1024;
 
   // Number of open files that can be used by the DB.  You may need to

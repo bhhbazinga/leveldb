@@ -23,9 +23,11 @@ namespace config {
 static const int kNumLevels = 7;
 
 // Level-0 compaction is started when we hit this many files.
+// 当第0层的sstable数量达到kL0_CompactionTrigger，第0层合并开始
 static const int kL0_CompactionTrigger = 4;
 
 // Soft limit on number of level-0 files.  We slow down writes at this point.
+// 当第0层的sstable数量达到kL0_SlowdownWritesTrigger，减慢写入速度
 static const int kL0_SlowdownWritesTrigger = 8;
 
 // Maximum number of level-0 files.  We stop writes at this point.

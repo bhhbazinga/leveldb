@@ -1191,9 +1191,11 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
   MutexLock l(&mutex_);
   writers_.push_back(&w);
   while (!w.done && &w != writers_.front()) {
+    // 阻塞当前write线程，直到本次write完成或者本次write处于队列首位
     w.cv.Wait();
   }
   if (w.done) {
+    // 被唤醒时，如果write已经完成了就返回
     return w.status;
   }
 
@@ -1307,6 +1309,10 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
 
 // REQUIRES: mutex_ is held
 // REQUIRES: this thread is currently at the front of the writer queue
+//
+// 确保当前memtable有写入空间。
+// 在进行MakeRoomForWrite操作时，当前的线程占有锁，
+// 并且当前write请求处于队列首位。
 Status DBImpl::MakeRoomForWrite(bool force) {
   mutex_.AssertHeld();
   assert(!writers_.empty());
@@ -1315,6 +1321,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
   while (true) {
     if (!bg_error_.ok()) {
       // Yield previous error
+      // 后台任务出错时立刻返回
       s = bg_error_;
       break;
     } else if (allow_delay && versions_->NumLevelFiles(0) >=
@@ -1325,25 +1332,36 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       // individual write by 1ms to reduce latency variance.  Also,
       // this delay hands over some CPU to the compaction thread in
       // case it is sharing the same core as the writer.
+      // 第0层sstable文件数量达到kL0_SlowdownWritesTrigger时，当前write线程睡眠
+      // 1秒。同时，如果compaction线程跟write线程共享一个核心时，write线程可以让出
+      // CPU给compaction线程。
       mutex_.Unlock();
       env_->SleepForMicroseconds(1000);
+      // 已经睡眠过一次的write线程，不能再次睡眠
       allow_delay = false;  // Do not delay a single write more than once
       mutex_.Lock();
     } else if (!force &&
                (mem_->ApproximateMemoryUsage() <= options_.write_buffer_size)) {
       // There is room in current memtable
+      // 当前memtable还有剩余可写空间，返回即可
       break;
     } else if (imm_ != nullptr) {
       // We have filled up the current memtable, but the previous
       // one is still being compacted, so we wait.
+      // immutab memtable不为空，说明compaction正在进行，
+      // 等待compaction完成。
       Log(options_.info_log, "Current memtable full; waiting...\n");
       background_work_finished_signal_.Wait();
     } else if (versions_->NumLevelFiles(0) >= config::kL0_StopWritesTrigger) {
+      // 第0层sstable文件数量达到kL0_StopWritesTrigger，
+      // 等待compaction完成。
       // There are too many level-0 files.
       Log(options_.info_log, "Too many L0 files; waiting...\n");
       background_work_finished_signal_.Wait();
     } else {
       // Attempt to switch to a new memtable and trigger compaction of old
+      // 将memtable转化为immutable memtable，
+      // 并生成新的log文件。
       assert(versions_->PrevLogNumber() == 0);
       uint64_t new_log_number = versions_->NewFileNumber();
       WritableFile* lfile = nullptr;
