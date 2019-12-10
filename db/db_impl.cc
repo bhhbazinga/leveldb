@@ -1202,7 +1202,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
   // May temporarily unlock and wait.
   Status status = MakeRoomForWrite(updates == nullptr);
   uint64_t last_sequence = versions_->LastSequence();
-  Writer* last_writer = &w;
+  Writer* last_writer = &w; // 合批之后，同一批次的最后一个writer
   if (status.ok() && updates != nullptr) {  // nullptr batch is for compactions
     WriteBatch* updates = BuildBatchGroup(&last_writer);
     WriteBatchInternal::SetSequence(updates, last_sequence + 1);
@@ -1212,6 +1212,9 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
     // during this phase since &w is currently responsible for logging
     // and protects against concurrent loggers and concurrent writes
     // into mem_.
+    // 将WriteBatch中的记录追加到log中，并同时写入memtable，这个时候是可以
+    // 解锁mutex_的，因为其他写线程因为 !w.done && &w != writers_.front() 这个条件
+    // 的限制处于阻塞中。
     {
       mutex_.Unlock();
       status = log_->AddRecord(WriteBatchInternal::Contents(updates));
@@ -1230,11 +1233,14 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
         // The state of the log file is indeterminate: the log record we
         // just added may or may not show up when the DB is re-opened.
         // So we force the DB into a mode where all future writes fail.
+        // 当前日志状态是不确定的，我们刚刚追加的日志可能在重启DB后不存在，
+        // 所以，我们强制DB进入一个所有之后的写入都会失败的模式??
         RecordBackgroundError(status);
       }
     }
-    if (updates == tmp_batch_) tmp_batch_->Clear();
+    if (updates == tmp_batch_) tmp_batch_->Clear(); // 条件满足说明进行了合批，tmp_batch_记录了合批内容，所以写入后需要清空
 
+    // 更新DB版本
     versions_->SetLastSequence(last_sequence);
   }
 
@@ -1242,15 +1248,18 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
     Writer* ready = writers_.front();
     writers_.pop_front();
     if (ready != &w) {
+      // w之前的write请求都已完成
+      // 什么情况下会发生这种可能??
       ready->status = status;
       ready->done = true;
       ready->cv.Signal();
     }
-    if (ready == last_writer) break;
+    if (ready == last_writer) break; // 到last_writer为止的write请求都已完成
   }
 
   // Notify new head of write queue
   if (!writers_.empty()) {
+    // 通知队首的write请求
     writers_.front()->cv.Signal();
   }
 
@@ -1259,6 +1268,10 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
 
 // REQUIRES: Writer list must be non-empty
 // REQUIRES: First writer must have a non-null batch
+// 待写入队列必须非空
+// 队首的writer的batch必须非空
+// last_writer用于获取合批之后，同一批次的最后一个writer
+// 返回合批后的WriteBatch
 WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
   mutex_.AssertHeld();
   assert(!writers_.empty());
@@ -1271,6 +1284,8 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
   // Allow the group to grow up to a maximum size, but if the
   // original write is small, limit the growth so we do not slow
   // down the small write too much.
+  // 允许group增长到最大大小，但是如果首位的write大小不算太大，允许超出
+  // 最大大小限制，这样我们不会减缓小的write请求的速度。
   size_t max_size = 1 << 20;
   if (size <= (128 << 10)) {
     max_size = size + (128 << 10);
@@ -1278,11 +1293,12 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
 
   *last_writer = first;
   std::deque<Writer*>::iterator iter = writers_.begin();
-  ++iter;  // Advance past "first"
+  ++iter;  // Advance past "first" 跳过首位
   for (; iter != writers_.end(); ++iter) {
     Writer* w = *iter;
     if (w->sync && !first->sync) {
       // Do not include a sync write into a batch handled by a non-sync write.
+      // 如果首位不是同步write，而后续的某一个write是同步的，那么它不能合并。
       break;
     }
 
@@ -1296,6 +1312,7 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
       // Append to *result
       if (result == first->batch) {
         // Switch to temporary batch instead of disturbing caller's batch
+        // 将result指向tmp_batch_，是为了不造成first->batch的内容的修改
         result = tmp_batch_;
         assert(WriteBatchInternal::Count(result) == 0);
         WriteBatchInternal::Append(result, first->batch);
@@ -1321,7 +1338,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
   while (true) {
     if (!bg_error_.ok()) {
       // Yield previous error
-      // 后台任务出错时立刻返回
+      // 后台任务出错，返回即可
       s = bg_error_;
       break;
     } else if (allow_delay && versions_->NumLevelFiles(0) >=
@@ -1360,7 +1377,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       background_work_finished_signal_.Wait();
     } else {
       // Attempt to switch to a new memtable and trigger compaction of old
-      // 将memtable转化为immutable memtable，
+      // 当前memtable空间不足时，将memtable转化为immutable memtable，
       // 并生成新的log文件。
       assert(versions_->PrevLogNumber() == 0);
       uint64_t new_log_number = versions_->NewFileNumber();
