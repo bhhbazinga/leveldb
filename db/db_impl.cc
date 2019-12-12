@@ -649,13 +649,17 @@ void DBImpl::MaybeScheduleCompaction() {
   mutex_.AssertHeld();
   if (background_compaction_scheduled_) {
     // Already scheduled
+    // 正在合并
   } else if (shutting_down_.load(std::memory_order_acquire)) {
     // DB is being deleted; no more background compactions
+    // DB正在析构，不需要执行合并
   } else if (!bg_error_.ok()) {
     // Already got an error; no more changes
+    // 发生后台错误，不需要再合并
   } else if (imm_ == nullptr && manual_compaction_ == nullptr &&
              !versions_->NeedsCompaction()) {
     // No work to be done
+    // 不满足合并条件
   } else {
     background_compaction_scheduled_ = true;
     env_->Schedule(&DBImpl::BGWork, this);
@@ -1188,7 +1192,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
   w.sync = options.sync;
   w.done = false;
 
-  MutexLock l(&mutex_);
+  MutexLock l(&mutex_);  // RAII风格管理锁
   writers_.push_back(&w);
   while (!w.done && &w != writers_.front()) {
     // 阻塞当前write线程，直到本次write完成或者本次write处于队列首位
@@ -1202,7 +1206,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
   // May temporarily unlock and wait.
   Status status = MakeRoomForWrite(updates == nullptr);
   uint64_t last_sequence = versions_->LastSequence();
-  Writer* last_writer = &w; // 合批之后，同一批次的最后一个writer
+  Writer* last_writer = &w;  // 合批之后，同一批次的最后一个writer
   if (status.ok() && updates != nullptr) {  // nullptr batch is for compactions
     WriteBatch* updates = BuildBatchGroup(&last_writer);
     WriteBatchInternal::SetSequence(updates, last_sequence + 1);
@@ -1213,8 +1217,8 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
     // and protects against concurrent loggers and concurrent writes
     // into mem_.
     // 将WriteBatch中的记录追加到log中，并同时写入memtable，这个时候是可以
-    // 解锁mutex_的，因为其他写线程因为 !w.done && &w != writers_.front() 这个条件
-    // 的限制处于阻塞中。
+    // 解锁mutex_的，因为其他写线程因为 !w.done && &w != writers_.front()
+    // 这个条件 的限制处于阻塞中。
     {
       mutex_.Unlock();
       status = log_->AddRecord(WriteBatchInternal::Contents(updates));
@@ -1238,7 +1242,8 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
         RecordBackgroundError(status);
       }
     }
-    if (updates == tmp_batch_) tmp_batch_->Clear(); // 条件满足说明进行了合批，tmp_batch_记录了合批内容，所以写入后需要清空
+    if (updates == tmp_batch_)
+      tmp_batch_->Clear();  // 条件满足说明进行了合批，tmp_batch_记录了合批内容，所以写入后需要清空
 
     // 更新DB版本
     versions_->SetLastSequence(last_sequence);
@@ -1254,7 +1259,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
       ready->done = true;
       ready->cv.Signal();
     }
-    if (ready == last_writer) break; // 到last_writer为止的write请求都已完成
+    if (ready == last_writer) break;  // 到last_writer为止的write请求都已完成
   }
 
   // Notify new head of write queue
@@ -1385,6 +1390,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       s = env_->NewWritableFile(LogFileName(dbname_, new_log_number), &lfile);
       if (!s.ok()) {
         // Avoid chewing through file number space in a tight loop.
+        // 失败时避免文件号浪费
         versions_->ReuseFileNumber(new_log_number);
         break;
       }

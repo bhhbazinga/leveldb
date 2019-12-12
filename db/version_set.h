@@ -6,11 +6,15 @@
 // newest version is called "current".  Older versions may be kept
 // around to provide a consistent view to live iterators.
 //
+// DBImpl的实现包含一系列的Versions，最新的version被称为"current"。
+// 老的versions可以保留，用于提供存活的迭代器一个一致性视图。
 // Each Version keeps track of a set of Table files per level.  The
 // entire set of versions is maintained in a VersionSet.
-//
+// 每个version管理每一层中的一系列sstable，所有的versions在VersionSet中
+// 维护。
 // Version,VersionSet are thread-compatible, but require external
 // synchronization on all accesses.
+// Version，VersionSet是线程兼容的，但所有的访问需要外部同步机制来作保证。
 
 #ifndef STORAGE_LEVELDB_DB_VERSION_SET_H_
 #define STORAGE_LEVELDB_DB_VERSION_SET_H_
@@ -42,6 +46,9 @@ class WritableFile;
 // Return the smallest index i such that files[i]->largest >= key.
 // Return files.size() if there is no such file.
 // REQUIRES: "files" contains a sorted list of non-overlapping files.
+// 返回最小的索引i，使得files[i]的最大的key>=key，
+// 如果不存在这样的文件，就返回files的大小，
+// 传入的files必须满足互相之间没有重合。
 int FindFile(const InternalKeyComparator& icmp,
              const std::vector<FileMetaData*>& files, const Slice& key);
 
@@ -51,6 +58,8 @@ int FindFile(const InternalKeyComparator& icmp,
 // largest==nullptr represents a key largest than all keys in the DB.
 // REQUIRES: If disjoint_sorted_files, files[] contains disjoint ranges
 //           in sorted order.
+// 返回files中的key是否与[smallest_user_key, largest_user_key]这个区间重合，
+// smallest_user_key == nullptr或largest_user_key==nullptr表示不设上下限。
 bool SomeFileOverlapsRange(const InternalKeyComparator& icmp,
                            bool disjoint_sorted_files,
                            const std::vector<FileMetaData*>& files,
@@ -62,6 +71,8 @@ class Version {
   // Lookup the value for key.  If found, store it in *val and
   // return OK.  Else return a non-OK status.  Fills *stats.
   // REQUIRES: lock is not held
+  // 查找key对应的value，如果找到就将它存到*val中，并返回OK状态，
+  // 否则返回失败状态。同时，填充*stat中的数据。
   struct GetStats {
     FileMetaData* seek_file;
     int seek_file_level;
@@ -70,6 +81,8 @@ class Version {
   // Append to *iters a sequence of iterators that will
   // yield the contents of this Version when merged together.
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
+  // 在*iters后追加迭代器序列，之后将会在合并时生成这个版本的内容。
+  // 当前版本必须已经保存。（参考VersionSet::SaveTo）
   void AddIterators(const ReadOptions&, std::vector<Iterator*>* iters);
 
   Status Get(const ReadOptions&, const LookupKey& key, std::string* val,
@@ -78,12 +91,20 @@ class Version {
   // Adds "stats" into the current state.  Returns true if a new
   // compaction may need to be triggered, false otherwise.
   // REQUIRES: lock is held
+  // 添加一个"stats"到当前state，如果一个新的compaction需要触发就返回
+  // true，否则返回false。
+  // 需要持有锁
   bool UpdateStats(const GetStats& stats);
 
   // Record a sample of bytes read at the specified internal key.
   // Samples are taken approximately once every config::kReadBytesPeriod
   // bytes.  Returns true if a new compaction may need to be triggered.
   // REQUIRES: lock is held
+  // 记录按特定internal key读取的字节样本??
+  // 大约每config::kReadBytesPeriod字节需要进行一次采样??
+  // 如果一个新的compaction需要触发就返回
+  // true，否则返回false。
+  // 需要持有锁
   bool RecordReadSample(Slice key);
 
   // Reference count management (so Versions do not disappear out from
@@ -101,17 +122,22 @@ class Version {
   // some part of [*smallest_user_key,*largest_user_key].
   // smallest_user_key==nullptr represents a key smaller than all the DB's keys.
   // largest_user_key==nullptr represents a key largest than all the DB's keys.
+  // 返回level层中是否有sstable的key与[smallest_user_key, largest_user_key]这个区间重合，
+  // smallest_user_key == nullptr或largest_user_key==nullptr表示不设上下限。
   bool OverlapInLevel(int level, const Slice* smallest_user_key,
                       const Slice* largest_user_key);
 
   // Return the level at which we should place a new memtable compaction
   // result that covers the range [smallest_user_key,largest_user_key].
+  // 返回一个需要执行memtable compaction的层，并把新的sstable置于该层??
+  // compaction结果覆盖[smallest_user_key,largest_user_key]这个区间??
   int PickLevelForMemTableOutput(const Slice& smallest_user_key,
                                  const Slice& largest_user_key);
 
   int NumFiles(int level) const { return files_[level].size(); }
 
   // Return a human readable string that describes this version's contents.
+  // 返回可读的version内容的描述
   std::string DebugString() const;
 
  private:
@@ -154,12 +180,15 @@ class Version {
   std::vector<FileMetaData*> files_[config::kNumLevels];
 
   // Next file to compact based on seek stats.
+  // 依据allowed_seeks判断的下一个需要合并的sstable的文件的metadata。
   FileMetaData* file_to_compact_;
   int file_to_compact_level_;
 
   // Level that should be compacted next and its compaction score.
   // Score < 1 means compaction is not strictly needed.  These fields
   // are initialized by Finalize().
+  // 下一个需要被合并的level，以及它的分数，分数小于1表示不需要合并。
+  // Finalize()执行时，会改变下以数值。
   double compaction_score_;
   int compaction_level_;
 };

@@ -19,7 +19,9 @@ struct FileMetaData {
   FileMetaData() : refs(0), allowed_seeks(1 << 30), file_size(0) {}
 
   int refs;
-  int allowed_seeks;  // Seeks allowed until compaction
+  // Seeks allowed until compaction
+  // 在合并前允许的最大seek次数
+  int allowed_seeks;  
   uint64_t number;
   uint64_t file_size;    // File size in bytes
   InternalKey smallest;  // Smallest internal key served by table
