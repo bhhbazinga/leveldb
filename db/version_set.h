@@ -207,6 +207,12 @@ class VersionSet {
   // current version.  Will release *mu while actually writing to the file.
   // REQUIRES: *mu is held on entry.
   // REQUIRES: no other thread concurrently calls LogAndApply()
+  // 将versionEdit引用到当前的version，同时创建一个新的fd，
+  // fd指向的文件被持久化，并且文件内容指向当前version??
+  // 当文件成功写入后释放锁。
+  // REQUIRES：
+  // 1.调用这个函数时持有锁
+  // 2.其他线程不会并发调用LogAndApply
   Status LogAndApply(VersionEdit* edit, port::Mutex* mu)
       EXCLUSIVE_LOCKS_REQUIRED(mu);
 
