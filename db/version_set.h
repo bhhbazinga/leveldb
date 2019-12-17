@@ -46,7 +46,7 @@ class WritableFile;
 // Return the smallest index i such that files[i]->largest >= key.
 // Return files.size() if there is no such file.
 // REQUIRES: "files" contains a sorted list of non-overlapping files.
-// 返回最小的索引i，使得files[i]的最大的key>=key，
+// 找到第一个最大的key>=key的sstable，返回他的下标i，
 // 如果不存在这样的文件，就返回files的大小，
 // 传入的files必须满足互相之间没有重合。
 int FindFile(const InternalKeyComparator& icmp,
@@ -60,6 +60,7 @@ int FindFile(const InternalKeyComparator& icmp,
 //           in sorted order.
 // 返回files中的key是否与[smallest_user_key, largest_user_key]这个区间重合，
 // smallest_user_key == nullptr或largest_user_key==nullptr表示不设上下限。
+// REQUIRES:如果disjoint_sorted_files是true， files包含不相交范围??
 bool SomeFileOverlapsRange(const InternalKeyComparator& icmp,
                            bool disjoint_sorted_files,
                            const std::vector<FileMetaData*>& files,
@@ -168,15 +169,19 @@ class Version {
   // false, makes no more calls.
   //
   // REQUIRES: user portion of internal_key == user_key.
+  // 由新到旧的顺序依次遍历每个包含user_key的sstable文件的FileMetaData，
+  // 如果func返回false则停止遍历。
+  // REQUIRES: internal_key的用户部分==user_key
   void ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
                           bool (*func)(void*, int, FileMetaData*));
 
-  VersionSet* vset_;  // VersionSet to which this Version belongs
-  Version* next_;     // Next version in linked list
-  Version* prev_;     // Previous version in linked list
-  int refs_;          // Number of live refs to this version
+  VersionSet* vset_;  // VersionSet to which this Version belongs 当前Version所属的VersionSet
+  Version* next_;     // Next version in linked list 链表中的下一个Version
+  Version* prev_;     // Previous version in linked list 链表中的上一个Version
+  int refs_;          // Number of live refs to this version 这个Version的有效引用计数
 
   // List of files per level
+  // 每层的文件的FileMetaData的列表
   std::vector<FileMetaData*> files_[config::kNumLevels];
 
   // Next file to compact based on seek stats.
@@ -217,20 +222,26 @@ class VersionSet {
       EXCLUSIVE_LOCKS_REQUIRED(mu);
 
   // Recover the last saved descriptor from persistent storage.
+  // 从存盘数据中恢复上一个保存的描述符??
   Status Recover(bool* save_manifest);
 
   // Return the current version.
+  // 返回当前Version
   Version* current() const { return current_; }
 
   // Return the current manifest file number
+  // 返回当前manifest文件数量
   uint64_t ManifestFileNumber() const { return manifest_file_number_; }
 
   // Allocate and return a new file number
+  // 分配一个新的文件号
   uint64_t NewFileNumber() { return next_file_number_++; }
 
   // Arrange to reuse "file_number" unless a newer file number has
   // already been allocated.
   // REQUIRES: "file_number" was returned by a call to NewFileNumber().
+  // 除非分配了新的文件号，否则重用这个文件号。
+  // REQUIRES：file_number是通过NewFileNumber()返回的
   void ReuseFileNumber(uint64_t file_number) {
     if (next_file_number_ == file_number + 1) {
       next_file_number_ = file_number;
@@ -242,6 +253,7 @@ class VersionSet {
   int NumLevelFiles(int level) const;
 
   // Return the combined file size of all files at the specified level.
+  // 返回指定level的文件总大小
   int64_t NumLevelBytes(int level) const;
 
   // Return the last sequence number.
@@ -249,12 +261,14 @@ class VersionSet {
   uint64_t LastSequence() const { return last_sequence_; }
 
   // Set the last sequence number to s.
+  // 设置最新的序列号
   void SetLastSequence(uint64_t s) {
     assert(s >= last_sequence_);
     last_sequence_ = s;
   }
 
   // Mark the specified file number as used.
+  // 标记指定的文件号被使用
   void MarkFileNumberUsed(uint64_t number);
 
   // Return the current log file number.
@@ -269,24 +283,32 @@ class VersionSet {
   // Returns nullptr if there is no compaction to be done.
   // Otherwise returns a pointer to a heap-allocated object that
   // describes the compaction.  Caller should delete the result.
+  // 生成一个从堆中分配的Compaction对象，这个对象包含了一个新的
+  // compaction操作所需要的信息。调用者需要自行delete这个指针。
+  // 如果不需要合并时返回nullptr??
   Compaction* PickCompaction();
 
   // Return a compaction object for compacting the range [begin,end] in
   // the specified level.  Returns nullptr if there is nothing in that
   // level that overlaps the specified range.  Caller should delete
   // the result.
+  // 返回一个用于合并指定level中key的范围在[begin,end]内的compaction对象,
+  // 如果指定level中没有key的范围在[begin,end]内则返回nullptr。
   Compaction* CompactRange(int level, const InternalKey* begin,
                            const InternalKey* end);
 
   // Return the maximum overlapping data (in bytes) at next level for any
   // file at a level >= 1.
-  int64_t MaxNextLevelOverlappingBytes();
+  // 返回下一层中最大重叠的数据大小，level>=1。
+  int64_t MaxNextLevelOverlappingBytes();         
 
   // Create an iterator that reads over the compaction inputs for "*c".
   // The caller should delete the iterator when no longer needed.
+  // 返回一个用于遍历Compaction的内容的迭代器，调用者需要自行delete迭代器指针。
   Iterator* MakeInputIterator(Compaction* c);
 
   // Returns true iff some level needs a compaction.
+  // 如果某些level需要合并则返回true。
   bool NeedsCompaction() const {
     Version* v = current_;
     return (v->compaction_score_ >= 1) || (v->file_to_compact_ != nullptr);
@@ -294,14 +316,18 @@ class VersionSet {
 
   // Add all files listed in any live version to *live.
   // May also mutate some internal state.
+  // ??
   void AddLiveFiles(std::set<uint64_t>* live);
 
   // Return the approximate offset in the database of the data for
   // "key" as of version "v".
+  // 返回指定version的db中的key的大概的偏移位置??
   uint64_t ApproximateOffsetOf(Version* v, const InternalKey& key);
 
   // Return a human-readable short (single-line) summary of the number
   // of files per level.  Uses *scratch as backing store.
+  // 返回每层文件号的可读的描述,
+  // 使用scratch作为备份存储??
   struct LevelSummaryStorage {
     char buffer[100];
   };
@@ -313,13 +339,16 @@ class VersionSet {
   friend class Compaction;
   friend class Version;
 
+  // 重用manifest
   bool ReuseManifest(const std::string& dscname, const std::string& dscbase);
 
   void Finalize(Version* v);
 
+  // 获取inputs对应的key的范围
   void GetRange(const std::vector<FileMetaData*>& inputs, InternalKey* smallest,
                 InternalKey* largest);
 
+  // 
   void GetRange2(const std::vector<FileMetaData*>& inputs1,
                  const std::vector<FileMetaData*>& inputs2,
                  InternalKey* smallest, InternalKey* largest);
@@ -327,8 +356,10 @@ class VersionSet {
   void SetupOtherInputs(Compaction* c);
 
   // Save current contents to *log
+  // 将当前内容保存到log
   Status WriteSnapshot(log::Writer* log);
 
+  // 追加一个新Version
   void AppendVersion(Version* v);
 
   Env* const env_;
@@ -345,54 +376,67 @@ class VersionSet {
   // Opened lazily
   WritableFile* descriptor_file_;
   log::Writer* descriptor_log_;
-  Version dummy_versions_;  // Head of circular doubly-linked list of versions.
+  Version dummy_versions_;  // Head of circular doubly-linked list of versions. // Version的循环双链表头节点
   Version* current_;        // == dummy_versions_.prev_
 
   // Per-level key at which the next compaction at that level should start.
   // Either an empty string, or a valid InternalKey.
+  // 每一层都有的一个key，表示下一次合并时需要从这个key开始??
+  // 可能是一个空string或是有效的InternalKey。
   std::string compact_pointer_[config::kNumLevels];
 };
 
 // A Compaction encapsulates information about a compaction.
+// Compaction类分装了合并所需要的信息
 class Compaction {
  public:
   ~Compaction();
 
   // Return the level that is being compacted.  Inputs from "level"
   // and "level+1" will be merged to produce a set of "level+1" files.
+  // 返回正在合并的level，来自level和level+1层的sstable将会合并到level+1层中。
   int level() const { return level_; }
 
   // Return the object that holds the edits to the descriptor done
   // by this compaction.
+  // 返回本次compaction后生成的VersionEdit??
   VersionEdit* edit() { return &edit_; }
 
   // "which" must be either 0 or 1
+  // which为0返回本层的文件数量，1返回下一层文件数量??
   int num_input_files(int which) const { return inputs_[which].size(); }
 
   // Return the ith input file at "level()+which" ("which" must be 0 or 1).
+  // 返回本次或下一次的第i个被合并的sstable的FileMetaData。
   FileMetaData* input(int which, int i) const { return inputs_[which][i]; }
 
   // Maximum size of files to build during this compaction.
+  // 返回本次合并后生成的最大文件数量
   uint64_t MaxOutputFileSize() const { return max_output_file_size_; }
 
   // Is this a trivial compaction that can be implemented by just
   // moving a single input file to the next level (no merging or splitting)
+  // 返回这个合并是否是一个轻量级的合并，即只是移动单个文件到下一层（不合并也不分割）。
   bool IsTrivialMove() const;
 
   // Add all inputs to this compaction as delete operations to *edit.
+  // 将所有的input加入compaction，表示删除操作的edit??
   void AddInputDeletions(VersionEdit* edit);
 
   // Returns true if the information we have available guarantees that
   // the compaction is producing data in "level+1" for which no data exists
   // in levels greater than "level+1".
+  // ??
   bool IsBaseLevelForKey(const Slice& user_key);
 
   // Returns true iff we should stop building the current output
   // before processing "internal_key".
+  // 如果我们需要在internal_key前停止构建当前的output则返回true。
   bool ShouldStopBefore(const Slice& internal_key);
 
   // Release the input version for the compaction, once the compaction
   // is successful.
+  // 合并完成时，发布版本??
   void ReleaseInputs();
 
  private:
@@ -407,15 +451,18 @@ class Compaction {
   VersionEdit edit_;
 
   // Each compaction reads inputs from "level_" and "level_+1"
+  // 当前层和下一次的所有文件的metadata
   std::vector<FileMetaData*> inputs_[2];  // The two sets of inputs
 
   // State used to check for number of overlapping grandparent files
   // (parent == level_ + 1, grandparent == level_ + 2)
+  // 用于检查重叠的grandparent文件数量的状态，
   std::vector<FileMetaData*> grandparents_;
-  size_t grandparent_index_;  // Index in grandparent_starts_
-  bool seen_key_;             // Some output key has been seen
+  size_t grandparent_index_;  // Index in grandparent_starts_ grandparent的开始的index
+  bool seen_key_;             // Some output key has been seen 某些output key被发现??
   int64_t overlapped_bytes_;  // Bytes of overlap between current output
                               // and grandparent files
+                              // 当前output与grandparent文件的重叠大小
 
   // State for implementing IsBaseLevelForKey
 
@@ -423,6 +470,7 @@ class Compaction {
   // is that we are positioned at one of the file ranges for each
   // higher level than the ones involved in this compaction (i.e. for
   // all L >= level_ + 2).
+  // ??
   size_t level_ptrs_[config::kNumLevels];
 };
 
