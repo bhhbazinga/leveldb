@@ -685,6 +685,8 @@ void DBImpl::BackgroundCall() {
 
   // Previous compaction may have produced too many files in a level,
   // so reschedule another compaction if needed.
+  // 之前的compaction可能处理了太多的文件(每次compaction会限制最大处理文件数量吗??)，
+  // 所以尝试再次执行compaction。
   MaybeScheduleCompaction();
   background_work_finished_signal_.SignalAll();
 }

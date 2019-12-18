@@ -1375,6 +1375,10 @@ FileMetaData* FindSmallestBoundaryFile(
 // parameters:
 //   in     level_files:      List of files to search for boundary files.
 //   in/out compaction_files: List of files to extend by adding boundary files.
+// 遍历compaction_files，对于每个文件key范围为[l1, u1]，
+// 如果同时存在某个level_files里的file，其key范围为[l2, u2]，
+// 如果u1 == l2则把level_files里的这个file添加到compaction_files中，
+// 之后需要再次搜索这个新加进来的file的边界u2
 void AddBoundaryInputs(const InternalKeyComparator& icmp,
                        const std::vector<FileMetaData*>& level_files,
                        std::vector<FileMetaData*>* compaction_files) {
