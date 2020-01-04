@@ -18,14 +18,13 @@ class VersionSet;
 struct FileMetaData {
   FileMetaData() : refs(0), allowed_seeks(1 << 30), file_size(0) {}
 
-  int refs;
-  // Seeks allowed until compaction
-  // 在合并前允许的最大seek次数
-  int allowed_seeks;  
-  uint64_t number;
-  uint64_t file_size;    // File size in bytes
-  InternalKey smallest;  // Smallest internal key served by table
-  InternalKey largest;   // Largest internal key served by table
+  int refs; // 引用计数
+  
+  int allowed_seeks;  // Seeks allowed until compaction 在合并前允许的最大seek次数
+  uint64_t number; // 文件号
+  uint64_t file_size;    // File size in bytes  文件大小
+  InternalKey smallest;  // Smallest internal key served by table sstable中最小的key
+  InternalKey largest;   // Largest internal key served by table sstable中最大的key
 };
 
 class VersionEdit {
@@ -62,6 +61,9 @@ class VersionEdit {
   // Add the specified file at the specified number.
   // REQUIRES: This version has not been saved (see VersionSet::SaveTo)
   // REQUIRES: "smallest" and "largest" are smallest and largest keys in file
+  // 在level层中新增文件。
+  // REQUIRES: 当前Version没有被保存
+  // REQUIRES: "smallest" 和 "largest"是文件中的最小、最大的key
   void AddFile(int level, uint64_t file, uint64_t file_size,
                const InternalKey& smallest, const InternalKey& largest) {
     FileMetaData f;
@@ -73,6 +75,7 @@ class VersionEdit {
   }
 
   // Delete the specified "file" from the specified "level".
+  // 删除level层中的制定文件，file为文件号
   void DeleteFile(int level, uint64_t file) {
     deleted_files_.insert(std::make_pair(level, file));
   }

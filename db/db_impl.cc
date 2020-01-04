@@ -707,6 +707,7 @@ void DBImpl::BackgroundCompaction() {
     c = versions_->CompactRange(m->level, m->begin, m->end);
     m->done = (c == nullptr);
     if (c != nullptr) {
+      // 获取当前合并层的最后一个文件的最大key
       manual_end = c->input(0, c->num_input_files(0) - 1)->largest;
     }
     Log(options_.info_log,

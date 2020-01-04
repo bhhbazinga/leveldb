@@ -212,7 +212,7 @@ class VersionSet {
   // current version.  Will release *mu while actually writing to the file.
   // REQUIRES: *mu is held on entry.
   // REQUIRES: no other thread concurrently calls LogAndApply()
-  // 将versionEdit引用到当前的version，同时创建一个新的fd，
+  // 将versionEdit应用到当前的version，同时创建一个新的fd，
   // fd指向的文件被持久化，并且文件内容指向当前version??
   // 当文件成功写入后释放锁。
   // REQUIRES：
@@ -445,10 +445,10 @@ class Compaction {
 
   Compaction(const Options* options, int level);
 
-  int level_;
-  uint64_t max_output_file_size_;
-  Version* input_version_;
-  VersionEdit edit_;
+  int level_; // 当前合并层
+  uint64_t max_output_file_size_; // 最大的输出文件大小
+  Version* input_version_; // 输入文件的Version
+  VersionEdit edit_; // 用于编辑本次合并的Version修改结果
 
   // Each compaction reads inputs from "level_" and "level_+1"
   // 当前层和下一次的所有文件的metadata
@@ -470,6 +470,7 @@ class Compaction {
   // is that we are positioned at one of the file ranges for each
   // higher level than the ones involved in this compaction (i.e. for
   // all L >= level_ + 2).
+  //
   // ??
   size_t level_ptrs_[config::kNumLevels];
 };
