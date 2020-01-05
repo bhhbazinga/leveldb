@@ -54,12 +54,14 @@ struct DBImpl::Writer {
 
 struct DBImpl::CompactionState {
   // Files produced by compaction
+  // 合并后生成的文件
   struct Output {
-    uint64_t number;
-    uint64_t file_size;
-    InternalKey smallest, largest;
+    uint64_t number; // 文件号
+    uint64_t file_size; // 文件大小
+    InternalKey smallest, largest; // 最小和最大的key
   };
 
+  // 返回最新生成的文件
   Output* current_output() { return &outputs[outputs.size() - 1]; }
 
   explicit CompactionState(Compaction* c)
@@ -75,15 +77,20 @@ struct DBImpl::CompactionState {
   // will never have to service a snapshot below smallest_snapshot.
   // Therefore if we have seen a sequence number S <= smallest_snapshot,
   // we can drop all entries for the same key with sequence numbers < S.
+  //
+  // 序列号小于smallest_snapshot的记录不重要，因为我们
+  // 永远不必为smallest_snapshot以下的快照提供服务??
+  // 因此如果我们遇到序列号小于smallest_snapshot的记录，可以直接丢弃??
   SequenceNumber smallest_snapshot;
 
+  // 合并后生成的文件列表
   std::vector<Output> outputs;
 
   // State kept for output being generated
   WritableFile* outfile;
   TableBuilder* builder;
-
-  uint64_t total_bytes;
+ 
+  uint64_t total_bytes; // 文件总大小
 };
 
 // Fix user-supplied options to be reasonable
@@ -703,6 +710,7 @@ void DBImpl::BackgroundCompaction() {
   bool is_manual = (manual_compaction_ != nullptr);
   InternalKey manual_end;
   if (is_manual) {
+    // 手动合并
     ManualCompaction* m = manual_compaction_;
     c = versions_->CompactRange(m->level, m->begin, m->end);
     m->done = (c == nullptr);
@@ -716,6 +724,7 @@ void DBImpl::BackgroundCompaction() {
         (m->end ? m->end->DebugString().c_str() : "(end)"),
         (m->done ? "(end)" : manual_end.DebugString().c_str()));
   } else {
+    // 自动合并
     c = versions_->PickCompaction();
   }
 
@@ -724,6 +733,7 @@ void DBImpl::BackgroundCompaction() {
     // Nothing to do
   } else if (!is_manual && c->IsTrivialMove()) {
     // Move file to next level
+    // 简单的轻量级合并
     assert(c->num_input_files(0) == 1);
     FileMetaData* f = c->input(0, 0);
     c->edit()->DeleteFile(c->level(), f->number);
@@ -754,6 +764,7 @@ void DBImpl::BackgroundCompaction() {
     // Done
   } else if (shutting_down_.load(std::memory_order_acquire)) {
     // Ignore compaction errors found during shutting down
+    // DB析构时，可以忽略合并时的错误
   } else {
     Log(options_.info_log, "Compaction error: %s", status.ToString().c_str());
   }
@@ -766,6 +777,7 @@ void DBImpl::BackgroundCompaction() {
     if (!m->done) {
       // We only compacted part of the requested range.  Update *m
       // to the range that is left to be compacted.
+      // 只合并了一部分请求的范围，将m的范围更新为剩余的范围
       m->tmp_storage = manual_end;
       m->begin = &m->tmp_storage;
     }
