@@ -675,8 +675,10 @@ void DBImpl::BackgroundCall() {
   assert(background_compaction_scheduled_);
   if (shutting_down_.load(std::memory_order_acquire)) {
     // No more background work when shutting down.
+    // DB析构时不处理后台任务
   } else if (!bg_error_.ok()) {
     // No more background work after a background error.
+    // 后台任务出错时，不再处理后台任务
   } else {
     BackgroundCompaction();
   }

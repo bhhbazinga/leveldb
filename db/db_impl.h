@@ -51,23 +51,30 @@ class DBImpl : public DB {
   // Extra methods (for testing) that are not in the public DB interface
 
   // Compact any files in the named level that overlap [*begin,*end]
+  // 合并所有key在[*begin,*end]这个区间的文件
   void TEST_CompactRange(int level, const Slice* begin, const Slice* end);
 
   // Force current memtable contents to be compacted.
+  // 强制合并当前的memtable
   Status TEST_CompactMemTable();
 
   // Return an internal iterator over the current state of the database.
   // The keys of this iterator are internal keys (see format.h).
   // The returned iterator should be deleted when no longer needed.
+  // 返回当前db状态对应的内部迭代器，迭代器的key是internal key。
+  // 需要自行delete迭代器指针
   Iterator* TEST_NewInternalIterator();
 
   // Return the maximum overlapping data (in bytes) at next level for any
   // file at a level >= 1.
+  // 返回下一层的最大相交数据大小。
   int64_t TEST_MaxNextLevelOverlappingBytes();
 
   // Record a sample of bytes read at the specified internal key.
   // Samples are taken approximately once every config::kReadBytesPeriod
   // bytes.
+  // 记录按指定internal key读取的字节样本??
+  // 每读config::kReadBytesPeriod字节，采样一次??
   void RecordReadSample(Slice key);
 
  private:

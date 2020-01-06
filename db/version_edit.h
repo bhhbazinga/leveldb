@@ -35,26 +35,37 @@ class VersionEdit {
 
   void Clear();
 
+  // 设置比较器名字
   void SetComparatorName(const Slice& name) {
     has_comparator_ = true;
     comparator_ = name.ToString();
   }
+
+  // 设置log文件号
   void SetLogNumber(uint64_t num) {
     has_log_number_ = true;
     log_number_ = num;
   }
+
+  // 设置前一个log文件号
   void SetPrevLogNumber(uint64_t num) {
     has_prev_log_number_ = true;
     prev_log_number_ = num;
   }
+
+  // 设置下一个文件号
   void SetNextFile(uint64_t num) {
     has_next_file_number_ = true;
     next_file_number_ = num;
   }
+
+  // 设置最新序列号
   void SetLastSequence(SequenceNumber seq) {
     has_last_sequence_ = true;
     last_sequence_ = seq;
   }
+
+  // 设置合并点?
   void SetCompactPointer(int level, const InternalKey& key) {
     compact_pointers_.push_back(std::make_pair(level, key));
   }
@@ -62,6 +73,9 @@ class VersionEdit {
   // Add the specified file at the specified number.
   // REQUIRES: This version has not been saved (see VersionSet::SaveTo)
   // REQUIRES: "smallest" and "largest" are smallest and largest keys in file
+  // 添加一个指定文件号的文件。
+  // REQUIRES:这个Version还没有被保存
+  // REQUIRES:smallest和largest是这个文件中的最小和最大的key
   void AddFile(int level, uint64_t file, uint64_t file_size,
                const InternalKey& smallest, const InternalKey& largest) {
     FileMetaData f;
