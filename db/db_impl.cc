@@ -509,6 +509,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   Status s;
   {
     mutex_.Unlock();
+    // 构建文件时，没有数据竞争，可以解锁
     s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
     mutex_.Lock();
   }
@@ -521,6 +522,8 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
 
   // Note that if file_size is zero, the file has been deleted and
   // should not be added to the manifest.
+  //
+  // 如果文件大小是0，文件已经被删除，不需要添加到manifest中。
   int level = 0;
   if (s.ok() && meta.file_size > 0) {
     const Slice min_user_key = meta.smallest.user_key();
@@ -544,6 +547,7 @@ void DBImpl::CompactMemTable() {
   assert(imm_ != nullptr);
 
   // Save the contents of the memtable as a new Table
+  // 将immutable memtable的内容存储为sstable
   VersionEdit edit;
   Version* base = versions_->current();
   base->Ref();
@@ -647,6 +651,7 @@ Status DBImpl::TEST_CompactMemTable() {
 void DBImpl::RecordBackgroundError(const Status& s) {
   mutex_.AssertHeld();
   if (bg_error_.ok()) {
+    // 如果之前没有错误，则更新错误
     bg_error_ = s;
     background_work_finished_signal_.SignalAll();
   }

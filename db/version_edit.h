@@ -99,22 +99,22 @@ class VersionEdit {
  private:
   friend class VersionSet;
 
-  typedef std::set<std::pair<int, uint64_t> > DeletedFileSet;
+  typedef std::set<std::pair<int, uint64_t> > DeletedFileSet; // 删除文件的集合
 
   std::string comparator_;
-  uint64_t log_number_;
-  uint64_t prev_log_number_;
-  uint64_t next_file_number_;
-  SequenceNumber last_sequence_;
-  bool has_comparator_;
-  bool has_log_number_;
-  bool has_prev_log_number_;
-  bool has_next_file_number_;
-  bool has_last_sequence_;
+  uint64_t log_number_; // log文件号
+  uint64_t prev_log_number_; // 前一个log文件号
+  uint64_t next_file_number_; // 下一个文件号
+  SequenceNumber last_sequence_; // 最新的序列号
+  bool has_comparator_; // 是否有比较器
+  bool has_log_number_; // 是否有log文件号
+  bool has_prev_log_number_; // 是否有前一个log文件号
+  bool has_next_file_number_; // 是否有下一个文件号
+  bool has_last_sequence_; // 是否有最新的序列号
 
-  std::vector<std::pair<int, InternalKey> > compact_pointers_;
+  std::vector<std::pair<int, InternalKey> > compact_pointers_; // 合并点集合
   DeletedFileSet deleted_files_;
-  std::vector<std::pair<int, FileMetaData> > new_files_;
+  std::vector<std::pair<int, FileMetaData> > new_files_; // 新增的文件
 };
 
 }  // namespace leveldb

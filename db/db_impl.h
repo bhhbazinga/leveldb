@@ -93,6 +93,8 @@ class DBImpl : public DB {
 
   // Per level compaction stats.  stats_[level] stores the stats for
   // compactions that produced data for the specified "level".
+  // 
+  // 每一层的合并状态，stats_[level]存储指定层的合并结果。
   struct CompactionStats {
     CompactionStats() : micros(0), bytes_read(0), bytes_written(0) {}
 
@@ -199,6 +201,8 @@ class DBImpl : public DB {
 
   // Set of table files to protect from deletion because they are
   // part of ongoing compactions.
+  //
+  // 一组sstable文件，用于避免删除，因为它们是正在进行合并的一部分??
   std::set<uint64_t> pending_outputs_ GUARDED_BY(mutex_);
 
   // Has a background compaction been scheduled or is running?
