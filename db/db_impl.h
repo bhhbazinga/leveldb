@@ -88,7 +88,7 @@ class DBImpl : public DB {
     bool done;
     const InternalKey* begin;  // null means beginning of key range
     const InternalKey* end;    // null means end of key range
-    InternalKey tmp_storage;   // Used to keep track of compaction progress
+    InternalKey tmp_storage;   // Used to keep track of compaction progress 用于记录合并进度
   };
 
   // Per level compaction stats.  stats_[level] stores the stats for
@@ -122,6 +122,7 @@ class DBImpl : public DB {
   void MaybeIgnoreError(Status* s) const;
 
   // Delete any unneeded files and stale in-memory entries.
+  // 删除所有不需要的文件和过期的内存中的记录
   void DeleteObsoleteFiles() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Compact the in-memory write buffer to disk.  Switches to a new
