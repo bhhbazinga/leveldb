@@ -5,7 +5,7 @@
 #ifndef STORAGE_LEVELDB_DB_VERSION_EDIT_H_
 #define STORAGE_LEVELDB_DB_VERSION_EDIT_H_
 
-#include <set>
+#include <set> 
 #include <utility>
 #include <vector>
 
@@ -64,7 +64,7 @@ class VersionEdit {
     last_sequence_ = seq;
   }
 
-  // 设置合并点?
+  // 设置合并点??
   void SetCompactPointer(int level, const InternalKey& key) {
     compact_pointers_.push_back(std::make_pair(level, key));
   }
@@ -113,7 +113,7 @@ class VersionEdit {
   bool has_next_file_number_; // 是否有下一个文件号
   bool has_last_sequence_; // 是否有最新的序列号
 
-  std::vector<std::pair<int, InternalKey> > compact_pointers_; // 合并点集合
+  std::vector<std::pair<int, InternalKey> > compact_pointers_; // 合并点集合??
   DeletedFileSet deleted_files_;
   std::vector<std::pair<int, FileMetaData> > new_files_; // 新增的文件
 };

@@ -596,6 +596,7 @@ class VersionSet::Builder {
   struct BySmallestKey {
     const InternalKeyComparator* internal_comparator;
 
+    // 按照文件中的最小key、文件号升序排序。 
     bool operator()(FileMetaData* f1, FileMetaData* f2) const {
       int r = internal_comparator->Compare(f1->smallest, f2->smallest);
       if (r != 0) {
@@ -608,6 +609,7 @@ class VersionSet::Builder {
   };
 
   typedef std::set<FileMetaData*, BySmallestKey> FileSet;
+  // 记录每一层新增和删除的文件。
   struct LevelState {
     std::set<uint64_t> deleted_files;
     FileSet* added_files;
@@ -650,8 +652,10 @@ class VersionSet::Builder {
   }
 
   // Apply all of the edits in *edit to the current state.
+  // 将VersionEdit应用到当前状态
   void Apply(VersionEdit* edit) {
     // Update compaction pointers
+    // 更新合并点集合
     for (size_t i = 0; i < edit->compact_pointers_.size(); i++) {
       const int level = edit->compact_pointers_[i].first;
       vset_->compact_pointer_[level] =
@@ -695,6 +699,7 @@ class VersionSet::Builder {
   }
 
   // Save the current state in *v.
+  // 将当前状态存储到Version v中
   void SaveTo(Version* v) {
     BySmallestKey cmp;
     cmp.internal_comparator = &vset_->icmp_;
