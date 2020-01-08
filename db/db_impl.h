@@ -98,6 +98,7 @@ class DBImpl : public DB {
   struct CompactionStats {
     CompactionStats() : micros(0), bytes_read(0), bytes_written(0) {}
 
+    // 统计某一层的合并时间、读写大小
     void Add(const CompactionStats& c) {
       this->micros += c.micros;
       this->bytes_read += c.bytes_read;

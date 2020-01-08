@@ -587,6 +587,9 @@ std::string Version::DebugString() const {
 // A helper class so we can efficiently apply a whole sequence
 // of edits to a particular state without creating intermediate
 // Versions that contain full copies of the intermediate state.
+//
+// 一个辅助类，这样我们就可以有效地将整个编辑序列应用到特定的状态，
+// 而不需要创一个包含中间状态的完整拷贝的中间Version。
 class VersionSet::Builder {
  private:
   // Helper to sort by v->files_[file_number].smallest
@@ -823,11 +826,13 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
 
   // Initialize new descriptor log file if necessary by creating
   // a temporary file that contains a snapshot of the current version.
+  // 生成一个新的Manifest文件，如果有必要生成一个包含当前版本快照的临时文件??
   std::string new_manifest_file;
   Status s;
   if (descriptor_log_ == nullptr) {
     // No reason to unlock *mu here since we only hit this path in the
     // first call to LogAndApply (when opening the database).
+    // 不能解锁*mu， 因为我们需要确保以下代码只被调用一次 （多线程打开DB时）
     assert(descriptor_file_ == nullptr);
     new_manifest_file = DescriptorFileName(dbname_, manifest_file_number_);
     edit->SetNextFile(next_file_number_);
@@ -857,6 +862,8 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
 
     // If we just created a new descriptor file, install it by writing a
     // new CURRENT file that points to it.
+    // 如果我们生成了一个新的描述文件，那么我们需要新建一个CURRENT文件，
+    // 这个文件中的内容指向描述文件
     if (s.ok() && !new_manifest_file.empty()) {
       s = SetCurrentFile(env_, dbname_, manifest_file_number_);
     }

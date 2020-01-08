@@ -91,6 +91,7 @@ class VersionEdit {
     deleted_files_.insert(std::make_pair(level, file));
   }
 
+  // 将VersioinEdit数据序列化到dst中
   void EncodeTo(std::string* dst) const;
   Status DecodeFrom(const Slice& src);
 
