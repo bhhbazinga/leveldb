@@ -46,7 +46,7 @@ class WritableFile;
 // Return the smallest index i such that files[i]->largest >= key.
 // Return files.size() if there is no such file.
 // REQUIRES: "files" contains a sorted list of non-overlapping files.
-// 找到第一个最大的key>=key的sstable，返回他的下标i，
+// 找到第一个最大的key>=key的sstable(相当于二分lower_bound)，返回他的下标i，
 // 如果不存在这样的文件，就返回files的大小，
 // 传入的files必须满足互相之间没有重合。
 int FindFile(const InternalKeyComparator& icmp,
@@ -86,6 +86,8 @@ class Version {
   // 当前版本必须已经保存。（参考VersionSet::SaveTo）
   void AddIterators(const ReadOptions&, std::vector<Iterator*>* iters);
 
+  // 查找key对应的value，如果找到就将它存到*val中，并返回OK状态，
+  // 否则返回失败状态。同时，填充*stat中的数据。
   Status Get(const ReadOptions&, const LookupKey& key, std::string* val,
              GetStats* stats);
 
@@ -135,6 +137,7 @@ class Version {
   int PickLevelForMemTableOutput(const Slice& smallest_user_key,
                                  const Slice& largest_user_key);
 
+  // 返回level层的文件数量
   int NumFiles(int level) const { return files_[level].size(); }
 
   // Return a human readable string that describes this version's contents.
@@ -170,7 +173,7 @@ class Version {
   //
   // REQUIRES: user portion of internal_key == user_key.
   // 由新到旧的顺序依次遍历每个包含user_key的sstable文件的FileMetaData，
-  // 如果func返回false则停止遍历。
+  // 并回调func,如果func返回false则停止遍历。
   // REQUIRES: internal_key的用户部分==user_key
   void ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
                           bool (*func)(void*, int, FileMetaData*));
@@ -194,7 +197,9 @@ class Version {
   // are initialized by Finalize().
   // 下一个需要被合并的level，以及它的分数，分数小于1表示不需要合并。
   // Finalize()执行时，会改变下以数值。
+  // compaction分数
   double compaction_score_;
+  // 下一个需要合并的层
   int compaction_level_;
 };
 
@@ -316,7 +321,7 @@ class VersionSet {
 
   // Add all files listed in any live version to *live.
   // May also mutate some internal state.
-  // ??
+  // 将所有live Version的文件加入 *live中，这可能会导致某些内部状态的改变。
   void AddLiveFiles(std::set<uint64_t>* live);
 
   // Return the approximate offset in the database of the data for
@@ -426,12 +431,13 @@ class Compaction {
   // Returns true if the information we have available guarantees that
   // the compaction is producing data in "level+1" for which no data exists
   // in levels greater than "level+1".
-  // ??
+  // 合并信息确保产生的数据位于level+1层，没有额外的数据大于level+1层 ??
   bool IsBaseLevelForKey(const Slice& user_key);
 
   // Returns true iff we should stop building the current output
   // before processing "internal_key".
   // 如果我们需要在internal_key前停止构建当前的output则返回true。
+  // (level + 1和 level + 2层中的文件有过多重叠)
   bool ShouldStopBefore(const Slice& internal_key);
 
   // Release the input version for the compaction, once the compaction
@@ -451,12 +457,12 @@ class Compaction {
   VersionEdit edit_; // 用于编辑本次合并的Version修改结果
 
   // Each compaction reads inputs from "level_" and "level_+1"
-  // 当前层和下一次的所有文件的metadata
+  // 当前层和下一层的所有文件的metadata
   std::vector<FileMetaData*> inputs_[2];  // The two sets of inputs
 
   // State used to check for number of overlapping grandparent files
   // (parent == level_ + 1, grandparent == level_ + 2)
-  // 用于检查重叠的grandparent文件数量的状态，
+  // 用于检查重叠的grandparent文件状态
   std::vector<FileMetaData*> grandparents_;
   size_t grandparent_index_;  // Index in grandparent_starts_ grandparent的开始的index
   bool seen_key_;             // Some output key has been seen 某些output key被发现??

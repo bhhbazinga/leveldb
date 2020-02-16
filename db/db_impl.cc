@@ -233,6 +233,8 @@ void DBImpl::DeleteObsoleteFiles() {
   if (!bg_error_.ok()) {
     // After a background error, we don't know whether a new version may
     // or may not have been committed, so we cannot safely garbage collect.
+    // 后台错误发生后，我们不知道是否一个新的Version已经被提交成功，所以我们不能安全地
+    // 执行gc。
     return;
   }
 
@@ -920,6 +922,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   }
 
   // Release mutex while we're actually doing the compaction work
+  // 当执行实际的合并操作时，释放锁
   mutex_.Unlock();
 
   Iterator* input = versions_->MakeInputIterator(compact->compaction);
@@ -931,12 +934,14 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   SequenceNumber last_sequence_for_key = kMaxSequenceNumber;
   for (; input->Valid() && !shutting_down_.load(std::memory_order_acquire);) {
     // Prioritize immutable compaction work
+    // 每次都判断是否有memtable，优先合并之
     if (has_imm_.load(std::memory_order_relaxed)) {
       const uint64_t imm_start = env_->NowMicros();
       mutex_.Lock();
       if (imm_ != nullptr) {
         CompactMemTable();
         // Wake up MakeRoomForWrite() if necessary.
+        // 唤醒由于调用MakeRoomForWrite阻塞的线程
         background_work_finished_signal_.SignalAll();
       }
       mutex_.Unlock();
@@ -946,6 +951,8 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
     Slice key = input->key();
     if (compact->compaction->ShouldStopBefore(key) &&
         compact->builder != nullptr) {
+      // level+1与level+2有过多文件重叠，则停止合并，
+      // 将输出的文件写入磁盘
       status = FinishCompactionOutputFile(compact, input);
       if (!status.ok()) {
         break;
@@ -955,6 +962,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
     // Handle key/value, add to state, etc.
     bool drop = false;
     if (!ParseInternalKey(key, &ikey)) {
+      // key解析失败
       // Do not hide error keys
       current_user_key.clear();
       has_current_user_key = false;
@@ -963,6 +971,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
       if (!has_current_user_key ||
           user_comparator()->Compare(ikey.user_key, Slice(current_user_key)) !=
               0) {
+        // 第一次解析到这个key
         // First occurrence of this user key
         current_user_key.assign(ikey.user_key.data(), ikey.user_key.size());
         has_current_user_key = true;
@@ -971,6 +980,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
 
       if (last_sequence_for_key <= compact->smallest_snapshot) {
         // Hidden by an newer entry for same user key
+        // 对于同一个key，丢弃序列号更小的
         drop = true;  // (A)
       } else if (ikey.type == kTypeDeletion &&
                  ikey.sequence <= compact->smallest_snapshot &&

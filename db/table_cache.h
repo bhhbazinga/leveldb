@@ -42,6 +42,7 @@ class TableCache {
              void (*handle_result)(void*, const Slice&, const Slice&));
 
   // Evict any entry for the specified file number
+  // 删除任意一个指定文件号的条目
   void Evict(uint64_t file_number);
 
  private:

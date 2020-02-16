@@ -125,7 +125,7 @@ class DBImpl : public DB {
   void MaybeIgnoreError(Status* s) const;
 
   // Delete any unneeded files and stale in-memory entries.
-  // 删除所有不需要的文件和过期的内存中的记录
+  // 删除所有不需要的文件和过期的内存中的条目
   void DeleteObsoleteFiles() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Compact the in-memory write buffer to disk.  Switches to a new
